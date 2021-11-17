@@ -1,0 +1,671 @@
+library(plyr)
+
+# get all the zip files
+zipF <- list.files(path = "C:/Users/d-jasmine.boatner/OneDrive - AFS Defense/dataverse_files/", pattern = "*.zip", full.names = TRUE)
+
+outDir <- "C:/Users/d-jasmine.boatner/OneDrive - AFS Defense/Documents/Unzipped ICEWS"
+
+ldply(.data = zipF, .fun = unzip, exdir = outDir)
+
+# get the tab files
+tab_files <- list.files(path = outDir, pattern = "*.tab")
+
+setwd(outDir)
+
+# read the tab files
+my_data <- lapply(tab_files, FUN = read.table, sep = '\t', header = TRUE, fill = TRUE)
+
+# loop approach since above gives error and I'm not sure where
+# for (i in tab_files) {
+#   db <- read.table(i, sep = '\t', header = TRUE, fill = TRUE)
+#   assign(paste0('db',i), db)
+# }
+
+library(plyr)
+icews <- do.call(rbind.fill, my_data)
+
+# fix 20200505, where event IDs are misplaced
+icews$Event.ID <- ifelse(is.na(icews$Event.ID), icews$ï..Event.ID, icews$Event.ID)
+
+# drop unneeded column
+icews <- subset(icews, select = -c(21))
+
+# 20210502 was broken, (no periods in column names) removed from original folder and then I added fixed consistent
+# version back in here
+
+library(readxl)
+db20210502 <- read_xls("C:/Users/d-jasmine.boatner/OneDrive - AFS Defense/Documents/broken icews/20210502-icews-events.xls")
+
+icews <- rbind.fill(icews, db20210502)
+
+# need to do some data cleaning
+# there are a few character in intensity when it should be numeric
+icews$Intensity <- as.numeric(icews$Intensity)
+
+# intensities should be between -10 to 10, some of these appear
+# to be lat/long
+icews$Intensity <- ifelse(icews$Intensity> 10,"", icews$Intensity)
+
+# make it numeric again
+icews$Intensity <- as.numeric(icews$Intensity)
+
+icews$Intensity <- ifelse(icews$Intensity< -10,"", icews$Intensity)
+
+# make it numeric again
+icews$Intensity <- as.numeric(icews$Intensity)
+
+# label the ones that seem to be legitimate intensities
+icews$nchar <- nchar(icews$Intensity)
+icews$incorrect <- ifelse(icews$nchar>4,1,0)
+
+# drop the intensities that are actually lat/long
+icews$Intensity <- ifelse(icews$incorrect==1, "", icews$Intensity)
+
+# make it numeric again
+icews$Intensity <- as.numeric(icews$Intensity)
+
+# There are some numbers incorrectly in the countries
+icews$Source.Country <- gsub("[0-9.-]", "", icews$Source.Country)
+icews$Target.Country <- gsub("[0-9.-]", "", icews$Target.Country)
+
+# There are some numbers incorrectly in the Publishers/Source Names/event text
+icews$Publisher <- gsub("[0-9.-]", "", icews$Publisher)
+icews$Source.Name <- gsub("[0-9.-]", "", icews$Source.Name)
+icews$Event.Text <- gsub("[0-9.-]", "", icews$Event.Text)
+icews$Target.Name <- gsub("[0-9.-]", "", icews$Target.Name)
+icews$City <- gsub("[0-9.-]", "", icews$City)
+icews$District <- gsub("[0-9.-]", "", icews$District)
+icews$Province <- gsub("[0-9.-]", "", icews$Province)
+
+
+
+
+# get rid of numbers and countries/sources in event date
+icews$Event.Date <- as.Date(icews$Event.Date)
+
+# rename dataset after dropping columns I don't need
+icews_clean <- subset(icews, select = -c(21:22))
+
+# substring all the columns to avoid string exceed error
+icews_clean$Event.Text <- lapply(icews_clean$Event.Text, substr, 1, 100)
+icews_clean$Event.ID <- lapply(icews_clean$Event.ID, substr, 1, 100)
+icews_clean$Event.Date <- lapply(icews_clean$Event.Date, substr, 1, 100)
+icews_clean$Source.Name <- lapply(icews_clean$Source.Name, substr, 1, 100)
+icews_clean$Source.Country <- lapply(icews_clean$Source.Country, substr, 1, 100)
+icews_clean$Source.Sectors <- lapply(icews_clean$Source.Sectors, substr, 1, 100)
+icews_clean$Target.Name <- lapply(icews_clean$Target.Name, substr, 1, 100)
+icews_clean$Target.Country <- lapply(icews_clean$Target.Country, substr, 1, 100)
+icews_clean$Target.Sectors <- lapply(icews_clean$Target.Sectors, substr, 1, 100)
+icews_clean$CAMEO.Code <- lapply(icews_clean$CAMEO.Code, substr, 1, 100)
+icews_clean$Country <- lapply(icews_clean$Country, substr, 1, 100)
+icews_clean$Intensity <- lapply(icews_clean$Intensity, substr, 1, 100)
+icews_clean$Story.ID <- lapply(icews_clean$Story.ID, substr, 1, 100)
+icews_clean$Sentence.Number <- lapply(icews_clean$Sentence.Number, substr, 1, 100)
+icews_clean$Publisher <- lapply(icews_clean$Publisher, substr, 1, 100)
+icews_clean$City <- lapply(icews_clean$City, substr, 1, 100)
+icews_clean$District <- lapply(icews_clean$District, substr, 1, 100)
+icews_clean$Province <- lapply(icews_clean$Province, substr, 1, 100)
+icews_clean$Latitude <- lapply(icews_clean$Latitude, substr, 1, 100)
+icews_clean$Longitude <- lapply(icews_clean$Longitude, substr, 1, 100)
+
+# Convert from list to correct format
+icews_clean$Event.ID <- as.character(icews_clean$Event.ID)
+icews_clean$Event.Date <- as.Date.character(icews_clean$Event.Date)
+icews_clean$Source.Name <- as.character(icews_clean$Source.Name)
+icews_clean$Source.Sectors <- as.character(icews_clean$Source.Sectors)
+icews_clean$Source.Country <- as.character(icews_clean$Source.Country)
+icews_clean$Event.Text <- as.character(icews_clean$Event.Text)
+icews_clean$Intensity <- as.numeric(icews_clean$Intensity)
+icews_clean$CAMEO.Code <- as.numeric(icews_clean$CAMEO.Code)
+icews_clean$Target.Name <- as.character(icews_clean$Target.Name)
+icews_clean$Target.Sectors <- as.character(icews_clean$Target.Sectors)
+icews_clean$Target.Country <- as.character(icews_clean$Target.Country)
+icews_clean$Story.ID <- as.numeric(icews_clean$Story.ID)
+icews_clean$Sentence.Number <- as.numeric(icews_clean$Sentence.Number)
+icews_clean$Country <- as.character(icews_clean$Country)
+icews_clean$Publisher <- as.character(icews_clean$Publisher)
+icews_clean$City <- as.character(icews_clean$City)
+icews_clean$District <- as.character(icews_clean$District)
+icews_clean$Province <- as.character(icews_clean$Province)
+icews_clean$Latitude <- as.numeric(icews_clean$Latitude)
+icews_clean$Longitude <- as.numeric(icews_clean$Longitude)
+
+# cote d'ivoire always gets messed up, clean those entries
+# by replacing with just country name like it should be
+
+icews_clean$Target.Country <- ifelse(grepl("Cote dIvoire", icews_clean$Target.Country), "Cote d'Ivoire", icews_clean$Target.Country)
+icews_clean$Source.Country <- ifelse(grepl("Cote dIvoire", icews_clean$Source.Country), "Cote d'Ivoire", icews_clean$Source.Country)
+
+# Cote d'ivoire also messes up event text, just make those entries blank
+icews_clean$Event.Text <- ifelse(grepl("Cote dIvoire", icews_clean$Event.Text), "", icews_clean$Event.Text)
+
+# if there's a comma or a slash in country, the row did not read in correctly
+# so make blank so final data looks cleaner
+icews_clean$Source.Country <- ifelse(grepl("\\,", icews_clean$Source.Country), "", icews_clean$Source.Country)
+icews_clean$Target.Country <- ifelse(grepl("\\,", icews_clean$Target.Country), "", icews_clean$Target.Country)
+icews_clean$Source.Country <- ifelse(grepl("\\/", icews_clean$Source.Country), "", icews_clean$Source.Country)
+icews_clean$Target.Country <- ifelse(grepl("\\/", icews_clean$Target.Country), "", icews_clean$Target.Country)
+
+# Some countries have missing -
+icews_clean$Source.Country <- ifelse(icews_clean$Source.Country=="GuineaBissau", "Guinea-Bissau", icews_clean$Source.Country)
+icews_clean$Source.Country <- ifelse(icews_clean$Source.Country=="TimorLeste", "Timor-Leste", icews_clean$Source.Country)
+icews_clean$Target.Country <- ifelse(icews_clean$Target.Country=="GuineaBissau", "Guinea-Bissau", icews_clean$Target.Country)
+icews_clean$Target.Country <- ifelse(icews_clean$Target.Country=="TimorLeste", "Timor-Leste", icews_clean$Target.Country)
+
+# read in valid countries/territories
+all_countries_icews_spelling <- read_excel("C:/Users/d-jasmine.boatner/OneDrive - AFS Defense/all_countries_icews_spelling.xlsx", 
+                                           col_names = FALSE)
+
+names(all_countries_icews_spelling)[1] <- "countries"
+
+# drop everything that doesn't have a valid source and target country
+# these rows did not read in correctly, so we don't
+# really lose anything valuable (about 50,000 rows dropped)
+icews_clean <- icews_clean[(icews_clean$Target.Country %in% all_countries_icews_spelling$countries &
+                                           icews_clean$Source.Country %in% all_countries_icews_spelling$countries),]
+
+
+# split into positive and negative interaction databases
+
+positive_interactions <- icews_clean[icews_clean$Intensity>0,]
+negative_interactions <- icews_clean[icews_clean$Intensity<0,]
+
+# write xlsx
+library(writexl)
+
+write_xlsx(positive_interactions, "positive_interactions.xlsx")
+write_xlsx(negative_interactions, "negative_interactions.xlsx")
+write_xlsx(icews_clean, "all_interactions.xlsx")
+
+# aggregate sum interactions between source and target countries
+
+positive_agg <- aggregate(list(positive_interactions$Intensity), 
+                          by = list(positive_interactions$Source.Country, positive_interactions$Target.Country),
+                                    FUN = sum, na.rm = TRUE)
+
+# rename for clarity
+
+names(positive_agg)[1] <- "Source.Country"
+names(positive_agg)[2] <- "Target.Country"
+names(positive_agg)[3] <- "Intensity"
+
+
+negative_agg <- aggregate(list(negative_interactions$Intensity), 
+                          by = list(negative_interactions$Source.Country, negative_interactions$Target.Country),
+                          FUN = sum, na.rm = TRUE)
+
+# rename for clarity
+
+names(negative_agg)[1] <- "Source.Country"
+names(negative_agg)[2] <- "Target.Country"
+names(negative_agg)[3] <- "Intensity"
+
+# aggregate overall
+all_agg <- aggregate(list(icews_clean$Intensity), 
+                          by = list(icews_clean$Source.Country, icews_clean$Target.Country),
+                          FUN = sum, na.rm = TRUE)
+
+
+# rename for clarity
+
+names(all_agg)[1] <- "Source.Country"
+names(all_agg)[2] <- "Target.Country"
+names(all_agg)[3] <- "Intensity"
+
+# write aggregated files
+write_xlsx(positive_agg, "positive_aggregated.xlsx")
+write_xlsx(negative_agg, "negative_aggregated.xlsx")
+write_xlsx(all_agg, "all_aggregated.xlsx")
+
+# Network Analysis of USA
+
+# Top 20 allies (most positive interactions)
+
+edges_pos <- positive_agg[positive_agg$Source.Country=="United States",]
+edges_pos <- edges_pos[order(edges_pos$Intensity, decreasing = TRUE),]
+
+# drop blank country entry
+edges_pos <- edges_pos[!edges_pos$Target.Country=="",]
+
+# keep top 20
+edges_pos <- head(edges_pos, 20)
+
+#graph
+library(igraph)
+
+g <- graph_from_data_frame(d = edges_pos, directed = TRUE)
+
+E(g)$width <- log(E(g)$Intensity)
+node.size <- exp(log10(E(g)$Intensity))
+# have to manually add in size and edge of node[1], (USA)
+
+node.sizes <- append(50,node.size)
+width <- append(5,E(g)$width)
+  
+edge_attr(g)
+par(mar=c(0,0,0,0))
+plot(g, vertex.color = "light blue", vertex.label.color = "black",
+     vertex.label.cex = .75, edge.curved = .25, vertex.size = node.sizes,
+     edge.width = width)
+
+# USA top 20 adversaries (most negative interactions)
+
+# Top 20 adversaries
+
+edges_neg <- negative_agg[negative_agg$Source.Country=="United States",]
+edges_neg$Intensity <- abs(edges_neg$Intensity)
+
+edges_neg <- edges_neg[order(edges_neg$Intensity, decreasing = TRUE),]
+
+# drop blank country entry
+edges_neg <- edges_neg[!edges_neg$Target.Country=="",]
+
+# keep top 20
+edges_neg <- head(edges_neg, 20)
+
+# graph
+
+g2 <- graph_from_data_frame(d = edges_neg, directed = TRUE)
+
+E(g2)$width <- log(E(g2)$Intensity)
+node.size <- exp(log10(E(g2)$Intensity))
+
+# have to manually add in size and edge of node[1], (USA)
+
+node.sizes <- append(50,node.size)
+width <- append(5,E(g2)$width)
+
+edge_attr(g2)
+par(mar=c(0,0,0,0))
+plot(g2, vertex.color = "red", vertex.label.color = "black",
+     vertex.label.cex = .75, edge.curved = .25, vertex.size = node.sizes,
+      edge.width = width)
+
+# plot overall from all interactions
+
+edges <- all_agg[all_agg$Source.Country=="United States",]
+edges <- edges[order(edges$Intensity, decreasing=TRUE),]
+edges <- edges[!(edges$Target.Country==""),]
+
+# keep top 20 and bottom 20
+edges_top <- head(edges, 20)
+edges_bottom <- tail(edges, 20)
+edges_bottom$Intensity <- abs(edges_bottom$Intensity)
+edges_bottom <- edges_bottom[order(edges_bottom$Intensity, decreasing = TRUE),]
+
+# graph
+
+# Top
+g3 <- graph_from_data_frame(d = edges_top, directed = TRUE)
+
+E(g3)$width <- log(E(g3)$Intensity)
+node.size <- exp(log10(E(g3)$Intensity))
+
+# have to manually add in size and edge of node[1], (USA)
+
+node.sizes <- append(50,node.size)
+width <- append(5,E(g3)$width)
+
+edge_attr(g3)
+par(mar=c(0,0,0,0))
+plot(g3, vertex.color = "light blue", vertex.label.color = "black",
+     vertex.label.cex = .75, edge.curved = .25, vertex.size = node.sizes,
+     edge.width = width)
+
+# Bottom
+g4 <- graph_from_data_frame(d = edges_bottom, directed = TRUE)
+
+E(g4)$width <- log(E(g4)$Intensity)
+node.size <- exp(log10(E(g4)$Intensity))
+
+# have to manually add in size and edge of node[1], (USA)
+
+node.sizes <- append(50,node.size)
+width <- append(5,E(g4)$width)
+
+edge_attr(g4)
+par(mar=c(0,0,0,0))
+plot(g4, vertex.color = "red", vertex.label.color = "black",
+     vertex.label.cex = .75, edge.curved = .25, vertex.size = node.sizes,
+     edge.width = width)
+
+# look at degree and betweenness with allies/enemies
+
+allies <- c("Afghanistan","South Korea", "Japan", "Russian Federation",
+            "Israel", "Ukraine", "India", "Taiwan", "Germany", "Australia",
+            "United Kingdom", "Mexico", "Sudan", "North Korea", "France", 
+            "Vietnam", "Egypt", "Georgia", "Guatemala", "Saudi Arabia")
+
+allies_interactions <- icews_clean[(icews_clean$Target.Country %in% allies |
+                          icews_clean$Source.Country %in% allies),]
+
+# drop interactions with the United States, since we want to know 
+# the allies connections with each other, not the US
+allies_interactions <- allies_interactions[!(allies_interactions$Target.Country=="United States"
+                                            | allies_interactions$Source.Country=="United States"),]
+
+
+allies_graph <- subset(allies_interactions, select = c(5,11))
+g <- graph_from_data_frame(allies_graph)
+
+dg <- as.data.frame(degree(g))
+bg <- as.data.frame(betweenness(g))
+
+dg_plot <- log(degree(g))
+bg_plot <- log(betweenness(g))
+
+plot(dg_plot,pch=8,cex=.7,col=3)
+text(1:length(dg_plot),dg_plot,names(dg_plot), cex=.5, pos = 4)
+plot(bg_plot,pch=18,cex=1.25,col=2)
+text(1:length(bg_plot),bg_plot,names(bg_plot), cex=.5, pos = 4)
+
+# look at adversaries
+
+adversaries <- c("Iran", "Syria", "Hong Kong", "China", "Cuba",
+                 "Iraq", "Myanmar", "Yemen", "Nicaragua", "Somalia",
+                 "Belarus", "Honduras", "Mali", "Zimbabwe", "Dominican Republic",
+                 "Micronesia", "Cape Verde", "Sierra Leone", "US Virgin Islands",
+                 "Lesotho")
+
+
+adversaries_interactions <- icews_clean[(icews_clean$Target.Country %in% adversaries |
+                                      icews_clean$Source.Country %in% adversaries),]
+
+# drop interactions with the United States, since we want to know 
+# the adversaries connections with each other, not the US
+adversaries_interactions <- adversaries_interactions[!(adversaries_interactions$Target.Country=="United States"
+                                             | adversaries_interactions$Source.Country=="United States"),]
+
+
+adversaries_graph <- subset(adversaries_interactions, select = c(5,11))
+g <- graph_from_data_frame(adversaries_graph)
+
+dg <- as.data.frame(degree(g))
+bg <- as.data.frame(betweenness(g))
+
+dg_plot <- log(degree(g))
+bg_plot <- log(betweenness(g))
+
+plot(dg_plot,pch=8,cex=.7,col=3)
+text(1:length(dg_plot),dg_plot,names(dg_plot), cex=.5, pos = 4)
+
+plot(bg_plot,pch=18,cex=1.25,col=2)
+text(1:length(bg_plot),bg_plot,names(bg_plot), cex=.5, pos = 4)
+
+# aggregate by date certain relationships for VARMA model
+
+# turn off scientific notation
+options(scipen=999)
+
+# US Russia relationship
+
+US_Russia <- icews_clean[(icews_clean$Source.Country=="United States" &
+                           icews_clean$Target.Country=="Russian Federation") |
+                           (icews_clean$Source.Country=="Russian Federation" & 
+                              icews_clean$Target.Country == "United States"),]
+
+
+US_Russia_timeseries <- aggregate(list(US_Russia$Intensity), by =
+                      list(US_Russia$Event.Date, US_Russia$Source.Country, US_Russia$Target.Country),
+                      FUN = sum, na.rm = TRUE)
+
+# renames for clarity
+names(US_Russia_timeseries)[1] <- "Event.Date"
+names(US_Russia_timeseries)[2] <- "Source.Country"
+names(US_Russia_timeseries)[3] <- "Target.Country"
+names(US_Russia_timeseries)[4] <- "Intensity"
+
+US_Russia_timeseries$Intensity <- formatC(US_Russia_timeseries$Intensity, 3)
+
+# US China Relationship
+
+US_China <- icews_clean[(icews_clean$Source.Country=="United States" &
+                            icews_clean$Target.Country=="China") |
+                           (icews_clean$Source.Country=="China" & 
+                              icews_clean$Target.Country == "United States"),]
+
+US_China_timeseries <- aggregate(list(US_China$Intensity), by =
+                                    list(US_China$Event.Date, US_China$Source.Country, US_China$Target.Country),
+                                  FUN = sum, na.rm = TRUE)
+
+# renames for clarity
+names(US_China_timeseries)[1] <- "Event.Date"
+names(US_China_timeseries)[2] <- "Source.Country"
+names(US_China_timeseries)[3] <- "Target.Country"
+names(US_China_timeseries)[4] <- "Intensity"
+
+US_China_timeseries$Intensity <- formatC(US_China_timeseries$Intensity, 3)
+
+# US Iran Relationship
+
+US_Iran <- icews_clean[(icews_clean$Source.Country=="United States" &
+                           icews_clean$Target.Country=="Iran") |
+                          (icews_clean$Source.Country=="Iran" & 
+                             icews_clean$Target.Country == "United States"),]
+
+US_Iran_timeseries <- aggregate(list(US_Iran$Intensity), by =
+                                   list(US_Iran$Event.Date, US_Iran$Source.Country, US_Iran$Target.Country),
+                                 FUN = sum, na.rm = TRUE)
+
+# renames for clarity
+names(US_Iran_timeseries)[1] <- "Event.Date"
+names(US_Iran_timeseries)[2] <- "Source.Country"
+names(US_Iran_timeseries)[3] <- "Target.Country"
+names(US_Iran_timeseries)[4] <- "Intensity"
+
+US_Iran_timeseries$Intensity <- formatC(US_Iran_timeseries$Intensity, 3)
+
+# add exchange rate and trade volume
+
+library(readxl)
+USD_Rubles <- read_excel("~/USD_Rubles.xlsx")
+USD_Rubles$Event.Date <- as.Date.character(USD_Rubles$Event.Date)
+
+US_Russia_timeseries$Event.Date <- as.Date.character(US_Russia_timeseries$Event.Date)
+
+US_Russia_timeseries <- merge(US_Russia_timeseries, USD_Rubles,
+                              by = "Event.Date", all.x = TRUE, all.y = FALSE)
+
+USD_CNY <- read_excel("~/USD_CNY.xlsx")
+
+USD_CNY$Event.Date <- as.Date.character(USD_CNY$Event.Date)
+
+US_China_timeseries$Event.Date <- as.Date.character(US_China_timeseries$Event.Date)
+
+US_China_timeseries <- merge(US_China_timeseries, USD_CNY,
+                              by = "Event.Date", all.x = TRUE, all.y = FALSE)
+
+USD_IRR <- read_excel("~/USD_IRR.xlsx")
+
+USD_IRR$Event.Date <- as.Date.character(USD_IRR$Event.Date)
+
+US_Iran_timeseries$Event.Date <- as.Date.character(US_Iran_timeseries$Event.Date)
+
+US_Iran_timeseries <- merge(US_Iran_timeseries, USD_IRR,
+                             by = "Event.Date", all.x = TRUE, all.y = FALSE)
+
+# forecasting with daily data
+library(forecast)
+
+US_to_Russia <- US_Russia_timeseries[US_Russia_timeseries$Source.Country=="United States",]
+
+dailyUSRussia <- ts(US_to_Russia$Intensity, frequency = 365)
+
+fit.intensity <- lm(dailyUSRussia ~ US_to_Russia$RUB + US_to_Russia$`Trade Volume (millions)`)
+
+prediction <- predict(fit.intensity,type="response")
+
+# only keep about 3 months of forecast
+predict1 <- head(prediction, 90)
+
+# predict out a full year
+predict2 <- head(prediction, 365)
+
+dataplusfcast <- append(dailyUSRussia, predict1)
+dataplusltfcast <- append(dailyUSRussia, predict2)
+
+library(lubridate)
+library(ggplot2)
+
+dataplusfcast <- ts(dataplusfcast, start = decimal_date(as.Date("2020-04-30")), frequency = 365)
+dataplusltfcast <- ts(dataplusltfcast, start = decimal_date(as.Date("2020-04-30")), frequency = 365)
+
+autoplot(dataplusfcast)
+
+moredates <- seq(as.Date("2021-10-18"), as.Date("2022-01-15"), by="days")
+dates <- append(US_to_Russia$Event.Date, moredates)
+dates <- strptime(dates, format='%Y-%m-%d')
+
+lt_dates <- seq(as.Date("2021-10-18"), as.Date("2022-10-17"), by="days")
+dates_lt <- append(US_to_Russia$Event.Date, lt_dates)
+dates_lt <- strptime(dates_lt, format='%Y-%m-%d')
+
+# plot history and forecast
+graphics.off()
+
+plot(dates, dataplusfcast, type= "l", ylab = "Intensity", 
+     xlab = "Event Date")
+abline(v=as.numeric(dates[403]), lwd=2, col='blue')
+abline(h=0, lty = 3)
+
+# plot just the forecast
+plot(moredates, predict1, type = "l", ylab = "Intensity Forecast", 
+     xlab = "Event Date")
+abline(h=0, lty = 3)
+
+# plot history and long term forecast
+plot(dates_lt, dataplusltfcast, type= "l", ylab = "Intensity", 
+     xlab = "Event Date")
+abline(v=as.numeric(dates[403]), lwd=2, col='blue')
+abline(h=0, lty = 3)
+
+# plot just the long term forecast
+plot(lt_dates, predict2, type = "l", ylab = "Intensity Forecast", 
+     xlab = "Event Date")
+abline(h=0, lty = 3)
+
+# plot the model
+plot(fit.intensity)
+
+# China
+
+US_to_China <- US_China_timeseries[US_China_timeseries$Source.Country=="United States",]
+
+dailyUSChina <- ts(US_to_China$Intensity, frequency = 365)
+
+fit.intensity <- lm(dailyUSChina ~ US_to_China$CNY + US_to_China$`Trade Volume (millions)`)
+
+prediction <- predict(fit.intensity,type="response")
+
+# only keep about 3 months of forecast
+predict1 <- head(prediction, 90)
+
+# long term forecast
+predict2 <- head(prediction, 365)
+
+dataplusfcast <- append(dailyUSChina, predict1)
+dataplusfcast <- ts(dataplusfcast, start = decimal_date(as.Date("2020-04-29")), frequency = 365)
+
+dataplusltfcast <- append(dailyUSChina, predict2)
+dataplusltfcast <- ts(dataplusltfcast, start = decimal_date(as.Date("2020-04-29")), frequency = 365)
+
+
+autoplot(dataplusfcast)
+
+moredates <- seq(as.Date("2021-10-18"), as.Date("2022-01-15"), by="days")
+dates <- append(US_to_China$Event.Date, moredates)
+dates <- strptime(dates, format='%Y-%m-%d')
+
+lt_dates <- seq(as.Date("2021-10-18"), as.Date("2022-10-17"), by="days")
+dates_lt <- append(US_to_China$Event.Date, lt_dates)
+dates_lt <- strptime(dates_lt, format='%Y-%m-%d')
+
+graphics.off()
+
+# plot history and forecast
+plot(dates, dataplusfcast, type= "l", ylab = "Intensity", 
+     xlab = "Event Date")
+abline(v=as.numeric(dates[463]), lwd=2, col='blue')
+abline(h=0, lty = 3)
+
+# plot just the forecast
+plot(moredates, predict1, type = "l", ylab = "Intensity Forecast", 
+     xlab = "Event Date")
+abline(h=0, lty = 3)
+
+# plot history and long term forecast
+plot(dates_lt, dataplusltfcast, type= "l", ylab = "Intensity", 
+     xlab = "Event Date")
+abline(v=as.numeric(dates[463]), lwd=2, col='blue')
+abline(h=0, lty = 3)
+
+# plot just the long term forecast
+plot(lt_dates, predict2, type = "l", ylab = "Intensity Forecast", 
+     xlab = "Event Date")
+abline(h=0, lty = 3)
+
+# plot model
+
+plot(fit.intensity)
+
+# Iran
+
+US_to_Iran <- US_Iran_timeseries[US_Iran_timeseries$Source.Country=="United States",]
+
+dailyUSIran <- ts(US_to_Iran$Intensity, frequency = 365)
+
+fit.intensity <- lm(dailyUSIran ~ US_to_Iran$IRR + US_to_Iran$`Trade Volume (millions)`)
+
+prediction <- predict(fit.intensity,type="response")
+
+# only keep about 3 months of forecast
+predict1 <- head(prediction, 90)
+dataplusfcast <- append(dailyUSIran, predict1)
+
+# long term forecast
+predict2 <- head(prediction, 365)
+dataplusltfcast <- append(dailyUSIran, predict2)
+
+dataplusfcast <- ts(dataplusfcast, start = decimal_date(as.Date("2020-05-01")), frequency = 365)
+dataplusltfcast <- ts(dataplusltfcast, start = decimal_date(as.Date("2020-05-01")), frequency = 365)
+
+
+autoplot(dataplusfcast)
+
+moredates <- seq(as.Date("2021-10-18"), as.Date("2022-01-15"), by="days")
+dates <- append(US_to_Iran$Event.Date, moredates)
+dates <- strptime(dates, format='%Y-%m-%d')
+
+lt_dates <- seq(as.Date("2021-10-18"), as.Date("2022-9-15"), by="days")
+dates_lt <- append(US_to_Iran$Event.Date, lt_dates)
+dates_lt <- strptime(dates_lt, format='%Y-%m-%d')
+
+graphics.off()
+
+# plot history and forecast
+plot(dates, dataplusfcast, type= "l", ylab = "Intensity", 
+     xlab = "Event Date")
+abline(v=as.numeric(dates[341]), lwd=2, col='blue')
+abline(h=0, lty = 3)
+
+# plot just the forecast
+plot(moredates, predict1, type = "l", ylab = "Intensity Forecast", 
+     xlab = "Event Date")
+abline(h=0, lty = 3)
+
+# plot history and lt forecast
+plot(dates_lt, dataplusltfcast, type= "l", ylab = "Intensity", 
+     xlab = "Event Date")
+abline(v=as.numeric(dates[341]), lwd=2, col='blue')
+abline(h=0, lty = 3)
+
+# plot just the forecast
+plot(lt_dates, predict2, type = "l", ylab = "Intensity Forecast", 
+     xlab = "Event Date")
+abline(h=0, lty = 3)
+
+# plot model
+
+plot(fit.intensity)
+
+# END
